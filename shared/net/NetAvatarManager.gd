@@ -24,12 +24,35 @@ func _resolve_network_singleton() -> Network:
 		return root.get_node("network") as Network
 	return null
 
+func _clear_all() -> void:
+	for k in _avatars.keys():
+		var a: Node = _avatars[k]
+		if is_instance_valid(a):
+			a.queue_free()
+	_avatars.clear()
+
+func _get_camera() -> Camera3D:
+	var cam := get_viewport().get_camera_3d()
+	return cam
+
 func _on_players(players: Array) -> void:
+	# If multiplayer isn't active yet (or we got disconnected), don't spawn anything.
 	var local_id: int = _net.get_local_peer_id()
+	if local_id == 0:
+		_clear_all()
+		return
+
+	var cam: Camera3D = _get_camera()
+	var base_pos := Vector3(0, 64, 0)
+	if cam != null:
+		# Place in front of the camera so you can always see them.
+		base_pos = cam.global_position + (-cam.global_transform.basis.z * 6.0)
 
 	# Track who should exist
 	var should_exist: Dictionary = {}
 	var idx := 0
+
+	print("[NetAvatarManager] roster size=%d local_id=%d" % [players.size(), local_id])
 
 	for p in players:
 		if not (p is Dictionary):
@@ -39,7 +62,7 @@ func _on_players(players: Array) -> void:
 		if pid == 0:
 			continue
 
-		# Only spawn remote avatars (local player is your real player controller later)
+		# Spawn only remotes
 		if pid == local_id:
 			continue
 
@@ -50,9 +73,11 @@ func _on_players(players: Array) -> void:
 			avatar.setup(pid, str(d.get("username", "Player")))
 			add_child(avatar)
 
-			# Debug placement: line them up so you can see them
-			avatar.global_position = Vector3(float(idx) * 2.5, 64.0, 0.0)
+			# Spread them out a bit
+			avatar.global_position = base_pos + Vector3(float(idx) * 2.0, 0.0, 0.0)
 			_avatars[pid] = avatar
+
+			print("[NetAvatarManager] spawned avatar for peer=%d" % pid)
 		else:
 			var avatar2: NetAvatar = _avatars[pid]
 			avatar2.setup(pid, str(d.get("username", "Player")))
@@ -67,7 +92,8 @@ func _on_players(players: Array) -> void:
 			to_remove.append(pid2)
 
 	for pid3 in to_remove:
-		var a: NetAvatar = _avatars[pid3]
-		if is_instance_valid(a):
-			a.queue_free()
+		var a2: NetAvatar = _avatars[pid3]
+		if is_instance_valid(a2):
+			a2.queue_free()
 		_avatars.erase(pid3)
+		print("[NetAvatarManager] removed avatar peer=%d" % pid3)

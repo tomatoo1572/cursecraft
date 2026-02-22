@@ -42,6 +42,9 @@ func set_auth_file_path(p: String) -> void:
 	_auth_file_path = p
 
 func get_local_peer_id() -> int:
+	# If multiplayer isn't active yet, get_unique_id will complain.
+	if multiplayer.multiplayer_peer == null:
+		return 0
 	return multiplayer.get_unique_id()
 
 func start_server(port: int = DEFAULT_PORT, max_clients: int = DEFAULT_MAX_CLIENTS) -> bool:
