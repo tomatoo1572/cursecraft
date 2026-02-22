@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://dab8tamkfs81j"]
+
+[ext_resource type="Script" uid="uid://dx762d1hfuxf" path="res://main/MainMenu.gd" id="1"]
+[ext_resource type="PackedScene" path="res://ui/WorldListUI.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://ui/WorldCreateUI.tscn" id="3"]
+
+[node name="MainMenu" type="Control" unique_id=1484099519]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="WorldListUI" parent="." unique_id=1502407131 instance=ExtResource("2")]
+anchors_preset = 0
+
+[node name="WorldCreateUI" parent="." unique_id=449662058 instance=ExtResource("3")]
+anchors_preset = 0

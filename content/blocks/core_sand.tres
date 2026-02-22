@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BlockDef" format=3 uid="uid://cg5teteeu1dm3"]
+
+[ext_resource type="Script" uid="uid://dg5vblx7hs3lc" path="res://content/defs/BlockDef.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "core:sand"
+display_name = "Sand"
+hardness = 0.5
+resistance = 0.5
+is_solid = true
+is_transparent = false
+atlas_index = 5
+item_id = "core:sand"
+tags = PackedStringArray("soil", "natural", "falling")

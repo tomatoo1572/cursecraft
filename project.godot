@@ -1,0 +1,34 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="CurseCraft"
+run/main_scene="res://main/MainMenu.tscn"
+config/features=PackedStringArray("4.6", "Forward Plus")
+run/max_fps=1000
+config/icon="res://icon.svg"
+
+[autoload]
+
+Paths="*uid://de2yhqyb8ao6h"
+WorldManager="*uid://cg2n1vawv5vj5"
+ContentRegistry="*uid://1a42yd7vhjsw"
+ModManager="*uid://dw8extcxgsuc7"
+network="*uid://b4sqiacvwdun6"
+NetDebugOverlay="*uid://b5kl1xs4wtvlq"
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+
+[rendering]
+
+rendering_device/driver.windows="d3d12"

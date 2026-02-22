@@ -1,0 +1,13 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://content/defs/ItemDef.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "core:grass"
+display_name = "Grass Block"
+max_stack = 64
+is_placeable = true
+place_block_id = "core:grass"
+atlas_index = 103
+tags = PackedStringArray("block_item", "soil", "surface")

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://content/defs/BlockDef.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "core:dirt"
+display_name = "Dirt"
+hardness = 0.5
+resistance = 0.5
+max_stack = 64
+is_solid = true
+is_transparent = false
+emits_light = 0
+requires_tool = false
+atlas_index = 2
+item_id = "core:dirt"
+tags = PackedStringArray("soil", "natural")

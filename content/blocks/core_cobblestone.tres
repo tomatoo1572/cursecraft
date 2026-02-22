@@ -1,0 +1,18 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://content/defs/BlockDef.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "core:cobblestone"
+display_name = "Cobblestone"
+hardness = 2.0
+resistance = 6.0
+max_stack = 64
+is_solid = true
+is_transparent = false
+emits_light = 0
+requires_tool = true
+atlas_index = 4
+item_id = "core:cobblestone"
+tags = PackedStringArray("rock", "natural")

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://content/defs/RecipeDef.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "core:cobble_to_stone"
+recipe_type = "furnace"
+inputs = Array[Dictionary]([{"item_id":"core:cobblestone","count":1}])
+outputs = Array[Dictionary]([{"item_id":"core:stone","count":1}])
+cook_time_sec = 6.0
+xp = 0.1

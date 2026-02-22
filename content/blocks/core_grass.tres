@@ -1,0 +1,18 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://content/defs/BlockDef.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "core:grass"
+display_name = "Grass Block"
+hardness = 0.6
+resistance = 0.6
+max_stack = 64
+is_solid = true
+is_transparent = false
+emits_light = 0
+requires_tool = false
+atlas_index = 3
+item_id = "core:grass"
+tags = PackedStringArray("soil", "natural", "surface")
