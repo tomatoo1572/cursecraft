@@ -23,7 +23,6 @@ var _net: Network = null
 var _net_accum: float = 0.0
 
 func _ready() -> void:
-	# Collision
 	var cs := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.35
@@ -31,7 +30,6 @@ func _ready() -> void:
 	cs.shape = cap
 	add_child(cs)
 
-	# Camera
 	_cam = Camera3D.new()
 	_cam.current = true
 	_cam.position = Vector3(0, 1.55, 0)
@@ -47,12 +45,22 @@ func _resolve_network() -> Network:
 		return root.get_node("network") as Network
 	return null
 
+func _ui_is_typing() -> bool:
+	var f := get_viewport().gui_get_focus_owner()
+	return (f is LineEdit) or (f is TextEdit)
+
 func set_captured(v: bool) -> void:
 	_captured = v
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED if _captured else Input.MOUSE_MODE_VISIBLE)
 
 func _process(dt: float) -> void:
-	# Toggle capture (F6)
+	# if focused in chat box, release capture and don't rotate
+	if _ui_is_typing():
+		if _captured:
+			set_captured(false)
+		return
+
+	# Toggle capture
 	var tdown: bool = Input.is_key_pressed(toggle_capture_key)
 	if tdown and not _prev_toggle:
 		set_captured(not _captured)
@@ -64,8 +72,8 @@ func _process(dt: float) -> void:
 		set_captured(false)
 	_prev_esc = esc
 
-	# Mouse look via polling (reliable even in SubViewport)
 	if _captured:
+		# reliable mouse look polling
 		var vel: Vector2 = Input.get_last_mouse_velocity()
 		_yaw -= vel.x * mouse_sens * dt
 		_pitch -= vel.y * mouse_sens * dt
@@ -77,17 +85,17 @@ func _process(dt: float) -> void:
 		_cam.rotation = Vector3(_pitch, 0.0, 0.0)
 
 func _physics_process(dt: float) -> void:
-	# Gravity
+	if _ui_is_typing():
+		return
+
 	if not is_on_floor():
 		velocity.y -= gravity * dt
 	else:
 		velocity.y = 0.0
 
-	# Jump
 	if _captured and is_on_floor() and Input.is_key_pressed(KEY_SPACE):
 		velocity.y = jump_velocity
 
-	# Movement
 	var input_dir := Vector3.ZERO
 	var fwd := -global_transform.basis.z
 	var right := global_transform.basis.x
@@ -117,7 +125,7 @@ func _physics_process(dt: float) -> void:
 
 	move_and_slide()
 
-	# Send state to server / broadcast from host
+	# Send state
 	_net_accum += dt
 	if _net != null and net_send_hz > 0.0 and _net_accum >= (1.0 / net_send_hz):
 		_net_accum = 0.0

@@ -26,6 +26,7 @@ var _net_viewport: Node = null
 
 # Network singleton (autoload instance)
 var _net: Node = null
+var _server_world_id: String = ""
 
 func _ready() -> void:
 	_title_label = _get_label(title_label_path, "TitleLabel")
@@ -47,23 +48,43 @@ func _ready() -> void:
 
 	_player_storage = PlayerStorage.new()
 
-	# Find optional NetAvatarViewport (if you added it to Game.tscn)
 	_net_viewport = find_child("NetAvatarViewport", true, false)
 
-	# Network (autoload can be named "network" or "Network")
 	_net = _get_network_singleton()
-	if _net != null and _net.has_signal("chat_message"):
-		# Avoid double-connecting
-		var cb := Callable(self, "_on_chat_message")
-		if not _net.is_connected("chat_message", cb):
-			_net.connect("chat_message", cb)
+	if _net != null:
+		if _net.has_signal("chat_message"):
+			var cb := Callable(self, "_on_chat_message")
+			if not _net.is_connected("chat_message", cb):
+				_net.connect("chat_message", cb)
+
+		if _net.has_signal("server_world_changed"):
+			var cb2 := Callable(self, "_on_server_world_changed")
+			if not _net.is_connected("server_world_changed", cb2):
+				_net.connect("server_world_changed", cb2)
 
 	_log("Game: ready. Use /help")
+	_log("Tip: Type without / to chat (proximity if multiplayer).")
 
 func start_world(meta: Dictionary) -> void:
+	var wid: String = str(meta.get("world_id", ""))
+
+	# If we are connected as a CLIENT, do not allow starting a different local world.
+	if _net != null and _net.has_method("is_multiplayer_active") and bool(_net.call("is_multiplayer_active")):
+		var local_id: int = 0
+		if _net.has_method("get_local_peer_id"):
+			local_id = int(_net.call("get_local_peer_id"))
+
+		var is_client: bool = (local_id != 0 and local_id != 1)
+		if is_client:
+			if _server_world_id.is_empty():
+				_log("[NET] Connected to server. Server world not chosen yet. Disconnect to play local worlds.")
+				return
+			if wid != _server_world_id:
+				_log("[NET] You are connected to a server world (%s). Disconnect to play '%s'." % [_server_world_id, wid])
+				return
+
 	_session = WorldSession.new(meta)
 
-	var wid: String = str(meta.get("world_id", ""))
 	var wname: String = str(meta.get("name", ""))
 	var preset: String = str(meta.get("worldgen_preset", "default"))
 	var mode: String = str(meta.get("game_mode", "survival"))
@@ -84,14 +105,21 @@ func start_world(meta: Dictionary) -> void:
 	var created: int = _session.sim.preload_spawn_area([_player.pos.x, _player.pos.y, _player.pos.z], 1)
 	_log("preload radius=1 created_chunks=%d chunks_dir=%s" % [created, Paths.world_chunks_dir(wid)])
 
-	# Tell the optional 3D viewport which world/player to render (if it supports it)
 	if _net_viewport != null and _net_viewport.has_method("set_world"):
 		_net_viewport.call("set_world", _session.sim, _player)
+
+	# If we are the HOST/server, announce world to clients (Minecraft style)
+	if _net != null and _net.has_method("is_multiplayer_active") and bool(_net.call("is_multiplayer_active")):
+		var local_id2: int = 0
+		if _net.has_method("get_local_peer_id"):
+			local_id2 = int(_net.call("get_local_peer_id"))
+		if local_id2 == 1 and _net.has_method("server_set_world"):
+			_net.call("server_set_world", wid)
+			_server_world_id = wid
 
 func stop_world() -> void:
 	_save_all()
 
-	# Clear optional 3D viewport world (if it supports it)
 	if _net_viewport != null and _net_viewport.has_method("clear_world"):
 		_net_viewport.call("clear_world")
 
@@ -127,9 +155,22 @@ func _on_exit_pressed() -> void:
 	stop_world()
 	request_exit_to_menu.emit()
 
-# Chat messages from Network
 func _on_chat_message(_from_peer_id: int, from_name: String, text: String) -> void:
 	_log("[CHAT] %s: %s" % [from_name, text])
+
+func _on_server_world_changed(world_id: String) -> void:
+	_server_world_id = world_id
+	_log("[NET] Server world = %s" % _server_world_id)
+
+	# If we're a client and currently in another world, stop it.
+	if _net != null and _net.has_method("is_multiplayer_active") and bool(_net.call("is_multiplayer_active")):
+		var local_id: int = 0
+		if _net.has_method("get_local_peer_id"):
+			local_id = int(_net.call("get_local_peer_id"))
+		var is_client: bool = (local_id != 0 and local_id != 1)
+		if is_client and _session != null and _session.world_id != _server_world_id:
+			_log("[NET] Stopping local world to follow server (world streaming comes next).")
+			stop_world()
 
 func _execute_command(text: String) -> void:
 	var line: String = text.strip_edges()
@@ -145,7 +186,7 @@ func _execute_command(text: String) -> void:
 		_log("No session loaded.")
 		return
 
-	# If it's not a slash-command, treat it as chat
+	# Non-slash is chat
 	if not line.begins_with("/"):
 		if _net == null:
 			_net = _get_network_singleton()
@@ -175,7 +216,7 @@ func _execute_command(text: String) -> void:
 		_log("/save")
 		_log("/preload r   (r = chunk radius)")
 		_log("/meta")
-		_log("(Tip) Type without / to chat (proximity if multiplayer).")
+		_log("(Tip) Type without / to chat (proximity).")
 		return
 
 	if cmd == "/whoami":
@@ -276,10 +317,7 @@ func _execute_command(text: String) -> void:
 			_log("Usage: /preload r")
 			return
 		var r: int = int(parts[1])
-		if r < 0:
-			r = 0
-		if r > 8:
-			r = 8
+		r = clamp(r, 0, 8)
 		var created2: int = _session.sim.preload_spawn_area([_player.pos.x, _player.pos.y, _player.pos.z], r)
 		_log("preload radius=%d created_chunks=%d" % [r, created2])
 		return

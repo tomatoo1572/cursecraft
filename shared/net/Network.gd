@@ -4,9 +4,15 @@ extends Node
 signal connection_state_changed(state: String)
 signal auth_state_changed(state: String, reason: String)
 signal player_list_changed(players: Array) # Array[Dictionary]
+
+# World authority (Minecraft-style)
+signal server_world_changed(world_id: String)
+
+# Movement sync + chat
 signal player_state_changed(peer_id: int, pos: Vector3, yaw: float)
 signal chat_message(from_peer_id: int, from_name: String, text: String)
 
+# ---------- Config ----------
 const DEFAULT_PORT: int = 24500
 const DEFAULT_MAX_CLIENTS: int = 64
 
@@ -17,10 +23,11 @@ const AUTH_TIMEOUT_SEC: float = 10.0
 const TOKEN_MAX_AGE_SEC: int = 60 * 60 * 24
 const ALLOW_INSECURE_DEV_IF_NO_SECRET: bool = true
 
-# Proximity chat (blocks/meters)
+# Proximity chat
 const CHAT_RANGE: float = 32.0
 const CHAT_MAX_LEN: int = 200
 
+# ---------- State ----------
 var is_server: bool = false
 var connected: bool = false
 
@@ -30,6 +37,7 @@ var _player_states: Dictionary = {}  # peer_id -> {pos:Vector3, yaw:float}
 var _used_nonces: Dictionary = {}    # uuid -> {nonce: issued_at}
 
 var _auth_file_path: String = AuthFile.DEFAULT_AUTH_PATH
+var _server_world_id: String = ""
 
 func _ready() -> void:
 	set_process(true)
@@ -54,6 +62,24 @@ func get_local_peer_id() -> int:
 	if not is_multiplayer_active():
 		return 0
 	return multiplayer.get_unique_id()
+
+func get_players() -> Array:
+	var arr: Array = []
+	for k: Variant in _players.keys():
+		arr.append(_players[k])
+	return arr
+
+func get_server_world_id() -> String:
+	return _server_world_id
+
+# Minecraft-style: server owns the world id
+func server_set_world(world_id: String) -> void:
+	if not multiplayer.is_server():
+		return
+	_server_world_id = world_id
+	emit_signal("server_world_changed", _server_world_id)
+	if is_multiplayer_active():
+		rpc("server_world_update", _server_world_id)
 
 func start_server(port: int = DEFAULT_PORT, max_clients: int = DEFAULT_MAX_CLIENTS) -> bool:
 	_reset_net()
@@ -95,15 +121,6 @@ func shutdown() -> void:
 	_reset_state_only()
 	emit_signal("connection_state_changed", "disconnected")
 
-func get_players() -> Array:
-	var arr: Array = []
-	for k: Variant in _players.keys():
-		arr.append(_players[k])
-	return arr
-
-func get_player_state(peer_id: int) -> Dictionary:
-	return (_player_states.get(peer_id, {}) as Dictionary)
-
 # Host (listen-server) registers itself as a player
 func register_local_player_from_auth_file() -> Dictionary:
 	var af: AuthFile = AuthFile.load_from(_auth_file_path)
@@ -129,7 +146,6 @@ func register_local_player_from_auth_file() -> Dictionary:
 	return {"ok": true, "reason": ""}
 
 # ---------------- Movement Sync ----------------
-# Call this from your player controller each tick (or ~20hz)
 func submit_local_state(pos: Vector3, yaw: float) -> void:
 	if not is_multiplayer_active():
 		return
@@ -141,7 +157,6 @@ func submit_local_state(pos: Vector3, yaw: float) -> void:
 	if multiplayer.is_server():
 		_server_accept_state(local_id, pos, yaw, true)
 	else:
-		# send to server (peer 1)
 		if _peer_exists(1):
 			rpc_id(1, "state_submit", pos, yaw)
 
@@ -154,17 +169,16 @@ func send_chat(text: String) -> void:
 		msg = msg.substr(0, CHAT_MAX_LEN)
 
 	if not is_multiplayer_active():
-		# local fallback (singleplayer)
 		emit_signal("chat_message", 0, "Local", msg)
 		return
 
 	var local_id: int = get_local_peer_id()
-	var uname: String = "Player"
+	var from_name: String = "Player"
 	if _players.has(local_id):
-		name = str((_players[local_id] as Dictionary).get("username", "Player"))
+		from_name = str((_players[local_id] as Dictionary).get("username", "Player"))
 
 	if multiplayer.is_server():
-		_server_chat_submit(local_id, name, msg)
+		_server_chat_submit(local_id, from_name, msg)
 	else:
 		if _peer_exists(1):
 			rpc_id(1, "chat_submit", msg)
@@ -176,6 +190,7 @@ func _reset_state_only() -> void:
 	_pending_auth.clear()
 	_players.clear()
 	_player_states.clear()
+	_server_world_id = ""
 
 func _reset_net() -> void:
 	var mp_peer: MultiplayerPeer = multiplayer.multiplayer_peer
@@ -221,13 +236,13 @@ func _on_server_disconnected() -> void:
 	emit_signal("auth_state_changed", "auth_failed", "server_disconnected")
 	_players.clear()
 	_player_states.clear()
+	_server_world_id = ""
 	emit_signal("player_list_changed", get_players())
 
 func _on_peer_connected(peer_id: int) -> void:
 	if not multiplayer.is_server():
 		return
 	_pending_auth[peer_id] = float(Time.get_ticks_msec()) / 1000.0
-	print("[Network] Peer connected: %d (pending auth)" % peer_id)
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if multiplayer.is_server():
@@ -252,17 +267,12 @@ func _tick_auth_timeouts() -> void:
 func _peer_exists(peer_id: int) -> bool:
 	if not is_multiplayer_active():
 		return false
-
-	# Self is always valid
 	if peer_id == multiplayer.get_unique_id():
 		return true
-
-	# Godot 4.6: MultiplayerAPI provides peers list
-	var peers: PackedInt32Array = multiplayer.get_peers()
+	var peers: PackedInt32Array = multiplayer.get_peers() # Godot 4.6 valid
 	return peers.has(peer_id)
 
 func _kick_peer(peer_id: int, reason: String) -> void:
-	# Only message if peer still exists (fixes your "Invalid target peer" spam)
 	if _peer_exists(peer_id):
 		rpc_id(peer_id, "kick", reason)
 
@@ -277,7 +287,6 @@ func _kick_peer(peer_id: int, reason: String) -> void:
 
 func _broadcast_player_list() -> void:
 	emit_signal("player_list_changed", get_players())
-	# Only broadcast if server + active peer
 	if multiplayer.is_server() and is_multiplayer_active():
 		rpc("player_list_update", get_players())
 
@@ -320,7 +329,6 @@ func _get_server_secret() -> String:
 		wf.store_line(secret)
 		wf.close()
 
-	print("[Network] Generated DEV server secret at %s (set %s in prod!)" % [SERVER_SECRET_FALLBACK_PATH, AUTH_SECRET_ENV])
 	return secret
 
 func _nonce_seen_before(uuid: String, nonce: String) -> bool:
@@ -336,6 +344,13 @@ func _remember_nonce(uuid: String, nonce: String, issued_at: int) -> void:
 	m[nonce] = issued_at
 	_used_nonces[uuid] = m
 
+# ---------------- RPC (World) ----------------
+
+@rpc("authority", "reliable")
+func server_world_update(world_id: String) -> void:
+	_server_world_id = world_id
+	emit_signal("server_world_changed", _server_world_id)
+
 # ---------------- RPC (Auth) ----------------
 
 @rpc("any_peer", "reliable")
@@ -344,14 +359,10 @@ func auth_submit(payload: Dictionary) -> void:
 		return
 
 	var peer_id: int = multiplayer.get_remote_sender_id()
-	# If peer vanished mid-call, ignore (prevents invalid target spam)
 	if not _peer_exists(peer_id):
 		return
 
 	var now_unix: int = int(Time.get_unix_time_from_system())
-
-	if not _pending_auth.has(peer_id) and not _players.has(peer_id):
-		_pending_auth[peer_id] = float(Time.get_ticks_msec()) / 1000.0
 
 	if typeof(payload) != TYPE_DICTIONARY or payload.is_empty():
 		_kick_peer(peer_id, "missing_payload")
@@ -390,6 +401,10 @@ func auth_submit(payload: Dictionary) -> void:
 
 	rpc_id(peer_id, "auth_result", true, "", now_unix, get_players())
 	_broadcast_player_list()
+
+	# tell new client current world (if any)
+	if not _server_world_id.is_empty():
+		rpc_id(peer_id, "server_world_update", _server_world_id)
 
 @rpc("authority", "reliable")
 func auth_result(ok: bool, reason: String, _server_time_unix: int, players: Array) -> void:
@@ -444,7 +459,6 @@ func state_update(peer_id: int, pos: Vector3, yaw: float) -> void:
 # ---------------- RPC (Chat) ----------------
 
 func _server_chat_submit(from_id: int, from_name: String, text: String) -> void:
-	# Determine sender pos (if missing, broadcast to all)
 	var has_pos: bool = _player_states.has(from_id)
 	var from_pos: Vector3 = Vector3.ZERO
 	if has_pos:
@@ -455,7 +469,7 @@ func _server_chat_submit(from_id: int, from_name: String, text: String) -> void:
 		var to_id: int = int(k)
 		if to_id == 0:
 			continue
-		# range check (skip for sender)
+
 		if to_id != from_id and has_pos and _player_states.has(to_id):
 			var st2: Dictionary = (_player_states[to_id] as Dictionary)
 			var to_pos: Vector3 = st2.get("pos", Vector3.ZERO)

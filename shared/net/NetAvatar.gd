@@ -14,7 +14,6 @@ func setup(p_peer_id: int, p_username: String) -> void:
 		_label.text = "%s\n(peer %d)" % [username, peer_id]
 
 func _ready() -> void:
-	# Mesh
 	_mesh = MeshInstance3D.new()
 	var cap := CapsuleMesh.new()
 	cap.radius = 0.35
@@ -22,7 +21,6 @@ func _ready() -> void:
 	_mesh.mesh = cap
 	add_child(_mesh)
 
-	# Name label
 	_label = Label3D.new()
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.no_depth_test = true
