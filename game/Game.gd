@@ -21,6 +21,12 @@ var _session: WorldSession
 var _player: PlayerSave
 var _player_storage: PlayerStorage
 
+# Optional 3D debug viewport (NetAvatarViewport)
+var _net_viewport: Node = null
+
+# Network singleton (autoload instance)
+var _net: Node = null
+
 func _ready() -> void:
 	_title_label = _get_label(title_label_path, "TitleLabel")
 	_output = _get_richtext(output_richtext_path, "Output")
@@ -40,6 +46,17 @@ func _ready() -> void:
 		_input.text_submitted.connect(_on_input_submitted)
 
 	_player_storage = PlayerStorage.new()
+
+	# Find optional NetAvatarViewport (if you added it to Game.tscn)
+	_net_viewport = find_child("NetAvatarViewport", true, false)
+
+	# Network (autoload can be named "network" or "Network")
+	_net = _get_network_singleton()
+	if _net != null and _net.has_signal("chat_message"):
+		# Avoid double-connecting
+		var cb := Callable(self, "_on_chat_message")
+		if not _net.is_connected("chat_message", cb):
+			_net.connect("chat_message", cb)
 
 	_log("Game: ready. Use /help")
 
@@ -67,8 +84,17 @@ func start_world(meta: Dictionary) -> void:
 	var created: int = _session.sim.preload_spawn_area([_player.pos.x, _player.pos.y, _player.pos.z], 1)
 	_log("preload radius=1 created_chunks=%d chunks_dir=%s" % [created, Paths.world_chunks_dir(wid)])
 
+	# Tell the optional 3D viewport which world/player to render (if it supports it)
+	if _net_viewport != null and _net_viewport.has_method("set_world"):
+		_net_viewport.call("set_world", _session.sim, _player)
+
 func stop_world() -> void:
 	_save_all()
+
+	# Clear optional 3D viewport world (if it supports it)
+	if _net_viewport != null and _net_viewport.has_method("clear_world"):
+		_net_viewport.call("clear_world")
+
 	if _session != null:
 		_session.sim.unload_all(false)
 	_session = null
@@ -101,6 +127,10 @@ func _on_exit_pressed() -> void:
 	stop_world()
 	request_exit_to_menu.emit()
 
+# Chat messages from Network
+func _on_chat_message(_from_peer_id: int, from_name: String, text: String) -> void:
+	_log("[CHAT] %s: %s" % [from_name, text])
+
 func _execute_command(text: String) -> void:
 	var line: String = text.strip_edges()
 	if _input != null:
@@ -113,6 +143,16 @@ func _execute_command(text: String) -> void:
 
 	if _session == null or _player == null:
 		_log("No session loaded.")
+		return
+
+	# If it's not a slash-command, treat it as chat
+	if not line.begins_with("/"):
+		if _net == null:
+			_net = _get_network_singleton()
+		if _net != null and _net.has_method("send_chat"):
+			_net.call("send_chat", line)
+		else:
+			_log("[CHAT] Local: %s" % line)
 		return
 
 	var parts: PackedStringArray = line.split(" ", false)
@@ -135,6 +175,7 @@ func _execute_command(text: String) -> void:
 		_log("/save")
 		_log("/preload r   (r = chunk radius)")
 		_log("/meta")
+		_log("(Tip) Type without / to chat (proximity if multiplayer).")
 		return
 
 	if cmd == "/whoami":
@@ -253,6 +294,13 @@ func _log(s: String) -> void:
 	print(s)
 	if _output != null:
 		_output.append_text(s + "\n")
+
+func _get_network_singleton() -> Node:
+	var root: Node = get_tree().root
+	var n: Node = root.get_node_or_null("network")
+	if n == null:
+		n = root.get_node_or_null("Network")
+	return n
 
 func _get_label(path: NodePath, fallback_name: String) -> Label:
 	var node: Node = null

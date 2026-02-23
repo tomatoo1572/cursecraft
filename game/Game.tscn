@@ -1,7 +1,8 @@
 [gd_scene format=3 uid="uid://cbm0gmpdvrfqb"]
 
 [ext_resource type="Script" uid="uid://chtj7wr0tnjmg" path="res://game/Game.gd" id="1"]
-[ext_resource type="Script" uid="uid://ggjivbgubqt1" path="res://shared/net/NetAvatarManager.gd" id="2_qdja7"]
+[ext_resource type="Script" uid="uid://1tw36nkkn8io" path="res://game/PanelNoStyle.gd" id="2_m71xk"]
+[ext_resource type="Script" uid="uid://xbyd4gnceydr" path="res://shared/net/NetAvatarViewport.gd" id="2_qdja7"]
 
 [node name="Game" type="Control" unique_id=949900691]
 layout_mode = 3
@@ -18,6 +19,7 @@ anchor_left = 0.02
 anchor_top = 0.02
 anchor_right = 0.98
 anchor_bottom = 0.98
+script = ExtResource("2_m71xk")
 
 [node name="VBox" type="VBoxContainer" parent="Panel" unique_id=1224539017]
 layout_mode = 0
@@ -59,5 +61,11 @@ text = "Save"
 layout_mode = 2
 text = "Exit"
 
-[node name="NetAvatarManager" type="Node3D" parent="." unique_id=704379120]
+[node name="NetAvatarViewport" type="SubViewportContainer" parent="." unique_id=946795391]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("2_qdja7")

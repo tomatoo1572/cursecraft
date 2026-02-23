@@ -25,6 +25,12 @@ ModManager="*uid://dw8extcxgsuc7"
 network="*uid://b4sqiacvwdun6"
 NetDebugOverlay="*uid://b5kl1xs4wtvlq"
 
+[display]
+
+window/size/mode=1
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

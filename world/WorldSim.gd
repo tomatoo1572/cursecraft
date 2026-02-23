@@ -49,6 +49,10 @@ func preload_spawn_area(spawn_xyz: Array, radius_chunks: int = 1) -> int:
 				created_count += 1
 	return created_count
 
+# NEW: public chunk getter for renderers / net streaming
+func get_chunk(cx: int, cy: int, cz: int) -> ChunkData:
+	return _get_or_load_or_generate_chunk(cx, cy, cz)
+
 func get_block_id_global(wx: int, wy: int, wz: int) -> String:
 	var cx: int = floor_div_int(wx, ChunkData.CHUNK_SIZE)
 	var cy: int = floor_div_int(wy, ChunkData.CHUNK_SIZE)
